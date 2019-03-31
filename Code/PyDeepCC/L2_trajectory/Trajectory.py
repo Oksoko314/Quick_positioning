@@ -3,6 +3,7 @@ from sklearn.cluster import k_means
 from scipy.spatial.distance import cdist
 from collections import Counter
 from itertools import compress
+import copy
 import time
 
 from utils import get_appearance_matrix, get_space_time_affinity
@@ -31,12 +32,12 @@ def recompute_trajectories(trajectories):
         key_data[:, 0] = -1
         new_data = fill_trajectories(key_data)
 
-        new_trajectory = trajectories[i]
+        new_trajectory = copy.copy(trajectories[i])
         sample_tracklet = trajectory.tracklets[0]
         new_trajectory.tracklets = []
 
         for k in range(num_segments):
-            tracklet = sample_tracklet
+            tracklet = copy.copy(sample_tracklet)
             tracklet.segment_start = segment_start + k * segment_length
             tracklet.segment_end = tracklet.segment_start + segment_length - 1
 
@@ -44,8 +45,8 @@ def recompute_trajectories(trajectories):
 
             tracklet.data = new_data[list(map(lambda x:x in tracklet_frames, new_data[:, 1])), :]
 
-            tracklet.start = min(tracklet.data[:, 0])
-            tracklet.finish = max(tracklet.data[:, -1])
+            tracklet.start = min(tracklet.data[:, 1])
+            tracklet.finish = max(tracklet.data[:, 1])
 
             new_trajectory.start_frame = min(new_trajectory.start_frame, tracklet.start)
             new_trajectory.end_frame = max(new_trajectory.end_frame, tracklet.finish)
@@ -54,7 +55,7 @@ def recompute_trajectories(trajectories):
 
         trajectories[i] = new_trajectory
 
-    return trajectories
+    return np.asarray(trajectories)
 
 
 def trajectories_to_top(trajectories):
@@ -203,7 +204,7 @@ def find_trajectories_in_window(input_trajectories, start_time, end_time):
                                       dtype=np.int)
     trajecotry_end_frame = np.array([input_trajectory.end_frame for input_trajectory in input_trajectories],
                                     dtype=np.int)
-    trajectories_ind = np.where(np.logical_and(trajecotry_end_frame >= start_time, trajecotry_start_frame <= end_time))[
+    trajectories_ind = np.where(np.logical_and(trajecotry_end_frame >= start_time, trajecotry_start_frame < end_time))[
         0]
     return trajectories_ind
 
@@ -281,9 +282,10 @@ def create_trajectories(configs, input_trajectories, start_frame, end_frame):
     smooth_trajectories = recompute_trajectories(new_trajectories)
 
     output_trajectories = input_trajectories
-    np.delete(output_trajectories, current_trajectories_ind)
 
-    output_trajectories.extend(smooth_trajectories)
+    output_trajectories = np.delete(output_trajectories, current_trajectories_ind)
+
+    output_trajectories = np.hstack((output_trajectories, smooth_trajectories))
 
     # show merged tracklets in window
     # TODO visualize

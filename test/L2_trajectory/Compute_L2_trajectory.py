@@ -8,7 +8,7 @@ from L1_tracklets import SmoothedTracklet
 def compute_L2_trajectories(configs, tracklets, start_frame, end_frame):
 
     trajectories_from_tracklets = tracklets_to_trajectory(tracklets, list(range(1, len(tracklets)+1)))
-    trajectories = trajectories_from_tracklets
+    trajectories = np.asarray(trajectories_from_tracklets)
 
     trajectory_config = configs["trajectories"]
 
@@ -16,9 +16,10 @@ def compute_L2_trajectories(configs, tracklets, start_frame, end_frame):
     window_end_frame = start_frame + trajectory_config['window_width']
 
     while window_start_frame <= end_frame:
-        trajectories = create_trajectories(configs, trajectories, window_start_frame, window_end_frame)
+        create_trajectories(configs, trajectories, window_start_frame, window_end_frame)
         window_start_frame = window_end_frame - trajectory_config['overlap']
-        window_end_frame = start_frame + trajectory_config['window_width']
+        window_end_frame = window_start_frame + trajectory_config['window_width']
+        print('start_frame : {}'.format(start_frame))
 
     # Convert trajectories
     tracker_output_raw = trajectories_to_top(trajectories)

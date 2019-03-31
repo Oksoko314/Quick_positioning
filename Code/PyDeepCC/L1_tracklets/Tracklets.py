@@ -1,9 +1,11 @@
+from operator import attrgetter
+
+import numpy as np
+from scipy.spatial.distance import cdist
+
+from L1_tracklets import KernighanLin
 from utils import get_bounding_box_centers, estimated_velocities, get_spatial_group_id, get_appearance_sub_matrix, \
     motion_affinity
-import numpy as np
-from operator import attrgetter
-from scipy.spatial.distance import cdist
-from L1_tracklets.KernighanLin import KernighanLin
 
 
 class SmoothedTracklet:
@@ -65,6 +67,7 @@ def smooth_tracklets(tracklets, segement_start, segment_interval, feature_appera
                                              segement_start, segment_interval, segment_interval + segement_start - 1)
 
         smoothed_tracklets.append(smoothed_tracklet)
+
     return smoothed_tracklets
 
 
