@@ -4,6 +4,7 @@ from scipy.spatial.distance import cdist
 from collections import Counter
 from itertools import compress
 import copy
+from collections import Counter
 import time
 
 from utils import get_appearance_matrix, get_space_time_affinity
@@ -18,13 +19,13 @@ def recompute_trajectories(trajectories):
         segment_end = trajectory.segment_end
 
         num_segments = int((segment_end + 1 - segment_start) / segment_length)
-        all_data = np.asarray([np.asarray(tracklet.data) for tracklet in trajectory.tracklets])[0]
+        all_data = np.vstack([np.asarray(tracklet.data) for tracklet in trajectory.tracklets])
         all_data = all_data[all_data[:, 1].argsort()]
 
         rows = np.unique(all_data[:, 1], return_index=True)[1]
         all_data = all_data[rows, :]
         data_frames = all_data[:, 1]
-        interesting_frames = np.round(np.hstack((min(data_frames), np.arange( segment_start + segment_length/2,
+        interesting_frames = np.round(np.hstack((min(data_frames), np.arange(segment_start + segment_length/2,
                                                                               segment_end, segment_length),
                                                  max(data_frames))))
 
@@ -60,24 +61,26 @@ def recompute_trajectories(trajectories):
 
 def trajectories_to_top(trajectories):
     data = []
+    # reset detection's id by trajectory
     for i, trajectory in enumerate(trajectories):
         for k, tracklet in enumerate(trajectory.tracklets):
             new_data = tracklet.data
-            new_data[:, 1] = i
+            new_data[:, 0] = i
             data.append(new_data)
-    return data
+    return np.vstack(data)
 
 
 def remove_short_tracks(detections, cutoff_length):
     # This function removes short tracks that have not been associated with
     # any trajectory. Those are likely to be false positives.
     detections_updated = detections
-    detections = detections[detections[:, [0, 1]].argsort(),]
-    person_ids = np.unique(detections[:, 0])
-    lengths = np.histogram(detections[:, 0], person_ids)
+    detections = detections[np.lexsort((detections[:, 1], detections[:, 0]))]
 
-    a = person_ids * (lengths < cutoff_length)
-    removed_ids = np.extract(a != 0, a)
+    removed_ids = []
+    for id_, count in Counter(detections[:, 0]).items():
+        if count < cutoff_length:
+            removed_ids.append(id_)
+
     np.delete(detections_updated, np.array([person_id for person_id in detections_updated[:, 0]
                                             if person_id in removed_ids]))
     return detections_updated
@@ -131,22 +134,24 @@ def solve_in_groups(configs, tracklets, labels):
     feature_vectors = np.array([tracklet.feature for tracklet in tracklets], dtype=np.float64)
     feature_vectors = np.reshape(feature_vectors, (len(tracklets), 128))
 
-    # adaptive number of appearance groups
-    if params["apperance_groups"] == 0:
-        # Increase number of groups until no group is too large to solve
-        while True:
-            params["apperance_groups"] += 1
-            apperance_feature, appearance_groups, _ = k_means(feature_vectors, n_clusters=params["apperance_groups"],
-                                                              n_jobs=-1)
-            uid, freq = list(zip(*Counter(appearance_groups).items()))
-            largest_group_size = max(freq)
-            # The BIP solver might run out of memory for large graphs
-            if largest_group_size <= 150:
-                break
-    else:
-        # fixed number of appearance groups
-        apperance_feature, appearance_groups, _ = k_means(feature_vectors, n_clusters=params["apperance_groups"],
-                                                          n_jobs=-1)
+    # # adaptive number of appearance groups
+    # if params["apperance_groups"] == 0:
+    #     # Increase number of groups until no group is too large to solve
+    #     while True:
+    #         params["apperance_groups"] += 1
+    #         apperance_feature, appearance_groups, _ = k_means(feature_vectors, n_clusters=params["apperance_groups"],
+    #                                                           n_jobs=-1)
+    #         uid, freq = list(zip(*Counter(appearance_groups).items()))
+    #         largest_group_size = max(freq)
+    #         # The BIP solver might run out of memory for large graphs
+    #         if largest_group_size <= 150:
+    #             break
+    # else:
+    #     # fixed number of appearance groups
+    #     apperance_feature, appearance_groups, _ = k_means(feature_vectors, n_clusters=params["apperance_groups"],
+    #                                                       n_jobs=-1)
+    # it seems that k-means do nothing there, and cost much
+    appearance_groups = [1] * len(feature_vectors)
     # solve separately for each appearance group
     all_groups = np.unique(appearance_groups)
 
@@ -267,13 +272,13 @@ def create_trajectories(configs, input_trajectories, start_frame, end_frame):
 
     # merge back solution. Tracklets that were associated are now merged back
     # with the rest of tracklets that were sharing the same trajectory
-    labels = tracklet_labels
+    labels = copy.copy(tracklet_labels)
     # labels[is_assocations] = result["labels"]
 
     count = 0
     for i, is_assocation in enumerate(is_assocations):
         if is_assocation:
-            labels[tracklet_labels == tracklet_labels[i]] = result["labels"][count]
+            labels[tracklet_labels.index(tracklet_labels[i])] = result["labels"][count]
             count += 1
 
     # merge co-identified tracklets to extended tracklets

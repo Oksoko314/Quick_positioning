@@ -19,20 +19,24 @@ def compute_L2_trajectories(configs, tracklets, start_frame, end_frame):
         create_trajectories(configs, trajectories, window_start_frame, window_end_frame)
         window_start_frame = window_end_frame - trajectory_config['overlap']
         window_end_frame = window_start_frame + trajectory_config['window_width']
-        print('start_frame : {}'.format(start_frame))
-
+        print('start_frame : {}'.format(window_start_frame))
+        print('create_trajectory from {} to {}'.format(window_start_frame, window_end_frame))
+    print("=="*10)
+    print("create_trajectory complete")
     # Convert trajectories
     tracker_output_raw = trajectories_to_top(trajectories)
     # Interpolate missing detections
+    print("begin fill missing detections for trajectories")
     tracker_output_filled = fill_trajectories(tracker_output_raw)
     # Remove spurius tracks
+    print("remove trajectories that too short")
     tracker_output_removed = remove_short_tracks(tracker_output_filled,
                                                  trajectory_config['minimum_trajectory_length'])
-
+    # make identities 1-indexed
     _, index = np.unique(tracker_output_removed[:, 1], return_inverse=True)
-    tracker_output_removed[:, 1] = index
-    tracker_output = tracker_output_removed[np.lexsort(tracker_output_removed[:, 1], tracker_output_removed[:, 0]), :]
-
+    tracker_output_removed[:, 0] = index
+    tracker_output = tracker_output_removed[np.lexsort((tracker_output_removed[:, 1], tracker_output_removed[:, 0]))]
+    print("Compute L2 trajectories complete")
     return tracker_output
 
 

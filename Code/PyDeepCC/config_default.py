@@ -33,10 +33,10 @@ configs = {
         'cluster_coeff': 0.75,
         'nearest_neighbors': 8,
         'speed_limit': 20,
-        'threshold': 8
+        'threshold': 8,
     },
     "trajectories": {
-        "apperance_groups": 0,
+        "apperance_groups": 1,
         "alpha": 1,
         "beta": 0.01,
         "window_width": 300,
@@ -44,6 +44,7 @@ configs = {
         "speed_limit": 30,
         "indifferent_time": 100,
         "threshold": 8,
+        "minimum_trajectory_length": 100,
     },
     'openpose': '/home/fyq/openpose/build/examples/openpose/openpose.bin',
     'openpose_model_folder' : '/home/fyq/openpose/models/',
