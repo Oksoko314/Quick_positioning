@@ -3,30 +3,31 @@ import os
 import numpy as np
 
 from L1_tracklets import get_valid_detections, create_tracklets
-from duke_utils import load_detections_openpose_json
+from duke_utils import load_detections
 from config_default import configs
 from utils import visiual_tracklets
 
 
 os.chdir(os.path.join(os.getcwd(), 'triplet_reid'))
-dataset_path = configs['dataset_path']
-detections_path = os.path.join(dataset_path, 'detections', 'OpenPose')
-file_name = configs['file_name']
+dataset_path = os.path.join(configs['dataset_path'], configs['video_name'])
+# detections_path = os.path.join(dataset_path, 'detections', 'OpenPose')
+detections_path = os.path.join(dataset_path, 'skeletons')
+file_dir = os.path.join(dataset_path, configs['file_name'])
 
 
 def compute_L1_tracklets(features, detections, start_frame, end_frame):
     frame_index = 1
     params = configs['tracklets']
-    # features = h5py.File(os.path.join(dataset_path, file_name), 'r')['emb']
-    # detections = load_detections_openpose_json(detections_path)
-    all_dets = detections
+
+    all_dets = np.copy(detections)
 
     tracklets = []
 
     for window_start_frame in range(start_frame, end_frame + 1, params['window_width']):
         window_end_frame = window_start_frame + params['window_width']
 
-        window_inds = np.where(np.logical_and(all_dets[frame_index, :] < window_end_frame, all_dets[frame_index, :] >= window_start_frame))[0]
+        window_inds = np.where(np.logical_and(all_dets[frame_index, :] < window_end_frame, all_dets[frame_index, :]
+                                              >= window_start_frame))[0]
 
         detections_in_window = np.copy(all_dets[:, window_inds]).T
 
@@ -51,7 +52,10 @@ def compute_L1_tracklets(features, detections, start_frame, end_frame):
 
     return tracklets
 
+
 if __name__ == '__main__':
-    tracklets = compute_L1_tracklets(configs['total_frame'])
-    video = os.path.join(configs['dataset_path'], configs['video_name'])
+    features = h5py.File(file_dir, 'r')['emb']
+    detections = load_detections(detections_path)
+    tracklets = compute_L1_tracklets(features, detections, 0, configs['total_frame'])
+    video = os.path.join(configs['dataset_path'], configs['video_name']+'.mp4')
     visiual_tracklets(tracklets, video)

@@ -2,6 +2,9 @@ from Trajectory import *
 from config_default import configs
 import pickle
 import os
+import cv2
+
+# must import the class that picked before
 from L1_tracklets import SmoothedTracklet
 
 
@@ -38,6 +41,25 @@ def compute_L2_trajectories(configs, tracklets, start_frame, end_frame):
     tracker_output = tracker_output_removed[np.lexsort((tracker_output_removed[:, 1], tracker_output_removed[:, 0]))]
     print("Compute L2 trajectories complete")
     return tracker_output
+
+
+def visual_tracker_output(video, tracker_output):
+    tracker_output_frames = tracker_output[:, 1]
+    cap = cv2.VideoCapture(video)
+    i = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        current_tracker_indexs = np.nonzero(tracker_output_frames==i)[0]
+        current_trackers = tracker_output[current_tracker_indexs]
+        for k, current_tracker in current_trackers:
+            id_, _, x, y, w, h = current_tracker
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (17*i % 255, 31*i % 255, 53*i % 255))
+        cv2.imshow('result', frame)
+        cv2.waitKey(10)
+        i += 1
 
 
 if __name__ == '__main__':

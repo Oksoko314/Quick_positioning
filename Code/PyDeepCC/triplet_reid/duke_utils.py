@@ -7,14 +7,13 @@ import scipy.io as sio
 import h5py
 import glob
 import json
+import pickle
 
 
 class CAMPUSVideoReader:
-    def __init__(self, dataset_path, video_name):
-        self.video_name = video_name
-        self.dataset_path = dataset_path
+    def __init__(self, video_dir):
         self.PrevFrame = -1
-        self.Video = cv2.VideoCapture(os.path.join(self.dataset_path, self.video_name), cv2.CAP_FFMPEG)
+        self.Video = cv2.VideoCapture(video_dir, cv2.CAP_FFMPEG)
 
     def getFrame(self, iFrame):
         current_frame = iFrame
@@ -24,105 +23,6 @@ class CAMPUSVideoReader:
         img = img[:, :, ::-1]  # bgr to rgb
         # Update
         self.PrevFrame = current_frame
-        return img
-
-
-
-
-
-
-class DukeVideoReader:
-    def __init__(self, dataset_path):
-        self.NumCameras = 8
-        self.NumFrames = [359580, 360720, 355380, 374850, 366390, 344400, 337680, 353220]
-        self.PartMaxFrame = 38370
-        self.MaxPart = [9, 9, 9, 9, 9, 8, 8, 9]
-        self.PartFrames = []
-        self.PartFrames.append([38370, 38370, 38370, 38370, 38370, 38370, 38370, 38370, 38370, 14250])
-        self.PartFrames.append([38370, 38370, 38370, 38370, 38370, 38370, 38370, 38370, 38370, 15390])
-        self.PartFrames.append([38400, 38370, 38370, 38370, 38370, 38370, 38370, 38370, 38370, 10020])
-        self.PartFrames.append([38670, 38670, 38670, 38670, 38670, 38700, 38670, 38670, 38670, 26790])
-        self.PartFrames.append([38370, 38370, 38370, 38370, 38370, 38370, 38370, 38370, 38370, 21060])
-        self.PartFrames.append([38400, 38370, 38370, 38370, 38400, 38400, 38370, 38370, 37350, 0])
-        self.PartFrames.append([38790, 38640, 38460, 38610, 38760, 38760, 38790, 38490, 28380, 0])
-        self.PartFrames.append([38370, 38370, 38370, 38370, 38370, 38370, 38370, 38370, 38370, 7890])
-        self.DatasetPath = dataset_path
-        self.CurrentCamera = 1
-        self.CurrentPart = 0
-        self.PrevCamera = 1
-        self.PrevFrame = -1
-        self.PrevPart = 0
-        self.Video = cv2.VideoCapture(
-            '{:s}videos/camera{:d}/{:05d}.MTS'.format(self.DatasetPath, self.CurrentCamera, self.CurrentPart),
-            cv2.CAP_FFMPEG)
-
-    def getFrame(self, iCam, iFrame):
-        # iFrame should be 1-indexed
-        assert iFrame > 0 and iFrame <= self.NumFrames[iCam - 1], 'Frame out of range'
-        # print('Frame: {0}'.format(iFrame))
-        # Cam 4 77311
-        # Coompute current frame and in which video part the frame belongs
-        ksum = 0
-        for k in range(10):
-            ksumprev = ksum
-            ksum += self.PartFrames[iCam - 1][k]
-            if iFrame <= ksum:
-                currentFrame = iFrame - 1 - ksumprev
-                iPart = k
-                break
-        # Update VideoCapture object if we are reading from a different camera or video part
-        if iPart != self.CurrentPart or iCam != self.CurrentCamera:
-            self.CurrentCamera = iCam
-            self.CurrentPart = iPart
-            self.PrevFrame = -1
-            self.Video = cv2.VideoCapture(
-                '{:s}videos/camera{:d}/{:05d}.MTS'.format(self.DatasetPath, self.CurrentCamera, self.CurrentPart),
-                cv2.CAP_FFMPEG)
-        # Update time only if reading non-consecutive frames
-        if not currentFrame == self.PrevFrame + 1:
-
-            # if iCam == self.PrevCamera and iPart == self.PrevPart and currentFrame - self.PrevFrame < 30:
-            #    # Skip consecutive images if less than 30 frames difference
-            #    back_frame = max(self.PrevFrame, 0)
-            # else:
-            #    # Seek, but make sure a keyframe is read before decoding
-            back_frame = max(currentFrame - 31, 0)  # Keyframes every 30 frames
-            # print('back_frame set to: {0}'.format(back_frame))
-            self.Video.set(cv2.CAP_PROP_POS_FRAMES, back_frame)
-            if not self.Video.get(cv2.CAP_PROP_POS_FRAMES) == back_frame:
-                print(
-                    'Warning: OpenCV has failed to set back_frame to {0}. OpenCV value is {1}. Target value is {2}'.format(
-                        back_frame, self.Video.get(cv2.CAP_PROP_POS_FRAMES), currentFrame))
-
-            back_frame = self.Video.get(cv2.CAP_PROP_POS_FRAMES)
-            # print('back_frame is: {0}'.format(back_frame))
-            while back_frame < currentFrame:
-                self.Video.read()
-                back_frame += 1
-        # print('currentFrame: {0}'.format(currentFrame))
-        # print('current position: {0}'.format(self.Video.get(cv2.CAP_PROP_POS_FRAMES)))
-        assert self.Video.get(cv2.CAP_PROP_POS_FRAMES) == currentFrame, 'Frame position error'
-        result, img = self.Video.read()
-        if result is False:
-            print('-Could not read frame, trying again')
-            back_frame = max(currentFrame - 61, 0)
-            self.Video.set(cv2.CAP_PROP_POS_FRAMES, back_frame)
-            if not self.Video.get(cv2.CAP_PROP_POS_FRAMES) == back_frame:
-                print(
-                    '-Warning: OpenCV has failed to set back_frame to {0}. OpenCV value is {1}. Target value is {2}'.format(
-                        back_frame, self.Video.get(cv2.CAP_PROP_POS_FRAMES), currentFrame))
-            back_frame = self.Video.get(cv2.CAP_PROP_POS_FRAMES)
-            # print('-back_frame is: {0}'.format(back_frame))
-            while back_frame < currentFrame:
-                self.Video.read()
-                back_frame += 1
-            result, img = self.Video.read()
-
-        img = img[:, :, ::-1]  # bgr to rgb
-        # Update
-        self.PrevFrame = currentFrame
-        self.PrevCamera = iCam
-        self.PrevPart = iPart
         return img
 
 
@@ -174,8 +74,8 @@ def pose2bb(pose):
     # Find transformation parameters
     M = points_det.shape[0]
     B = points_det.flatten('F')
-    A = np.vstack((np.column_stack((points_reference[:, 0], np.zeros((M)), np.ones((M)), np.zeros((M)))),
-                   np.column_stack((np.zeros((M)), points_reference[:, 1], np.zeros((M)), np.ones((M))))))
+    A = np.vstack((np.column_stack((points_reference[:, 0], np.zeros(M), np.ones(M), np.zeros(M))),
+                   np.column_stack((np.zeros((M)), points_reference[:, 1], np.zeros(M), np.ones(M)))))
 
     params = np.linalg.lstsq(A, B, rcond=None)
     params = params[0]
@@ -208,11 +108,11 @@ def pose2bb(pose):
     return bb
 
 
-def scale_bb(bb, pose, scalingFactor):
+def scale_bb(bb, pose, scaling_factor):
     # Scales bounding box by scaling factor
     newbb = np.zeros(bb.shape)
-    newbb[0:2] = bb[0:2] - 0.5 * (scalingFactor - 1) * bb[2:4]
-    newbb[2:4] = bb[2:4] * scalingFactor
+    newbb[0:2] = bb[0:2] - 0.5 * (scaling_factor - 1) * bb[2:4]
+    newbb[2:4] = bb[2:4] * scaling_factor
 
     # X, Y, strength
     newpose = np.reshape(pose, (18, 3))
@@ -221,8 +121,8 @@ def scale_bb(bb, pose, scalingFactor):
     newpose[:, 1] = (newpose[:, 1] - bb[1] / 1080.0) / (bb[3] / 1080.0)
 
     # Scale to stretched bounding box
-    newpose[:, 0] = (newpose[:, 0] + 0.5 * (scalingFactor - 1)) / scalingFactor
-    newpose[:, 1] = (newpose[:, 1] + 0.5 * (scalingFactor - 1)) / scalingFactor
+    newpose[:, 0] = (newpose[:, 0] + 0.5 * (scaling_factor - 1)) / scaling_factor
+    newpose[:, 1] = (newpose[:, 1] + 0.5 * (scaling_factor - 1)) / scaling_factor
     # Return in the original format
     newpose[newpose[:, 2] == 0, 0:2] = 0
     newpose = np.ravel(newpose)
@@ -257,96 +157,28 @@ def convert_img(img):
     return img
 
 
-def detections_generator(base_path, detections, height, width):
-    reader = DukeVideoReader(base_path)
-
-    for ind in range(detections.shape[0]):
-        print('reading detection {0}/{1}'.format(ind + 1, detections.shape[0]))
-        camera = int(detections[ind][0])
-        frame = int(detections[ind][1])
-        box = detections[ind][2:6]
-
-        img = reader.getFrame(camera, frame)
-
-        if box[2] < 20 or box[3] < 20:
-            snapshot = np.zeros((height, width, 3))
-        else:
-            snapshot = get_bb(img, box)
-            snapshot = cv2.resize(snapshot, (width, height))
-
-        yield snapshot
 
 
-def num_detections_from_openpose_mat(iCam, detections_path):
-    pose_file = os.path.join(detections_path, 'camera{0}.mat'.format(iCam))
-
-    with h5py.File(pose_file, 'r') as f:
-        detections = np.transpose(np.array(f['detections']))
-    return detections.shape[0]
+def load_detections(detections_path):
+    with open(detections_path, 'rb') as f:
+        detections = pickle.load(f)
+    return detections
 
 
-def load_detections_openpose_json(detections_path):
-    keypoints_jsones = glob.glob(os.path.join(detections_path, '*'))
-    keypoints_jsones = sorted(keypoints_jsones, key=lambda x: int(x[x.find('_') + 1:x.rfind('_')]))
-    detections = []
-    # i will be changed when camera id is imported
-    for i, keypoints_json in enumerate(keypoints_jsones):
-        poses = [np.hstack((i, i, people['pose_keypoints_2d'])) for people in json.load(open(keypoints_json, 'r'))['people']]
-        detections.extend(poses)
-    return np.asarray(detections)
+def num_detections(detections_path):
+    with open(detections_path, 'rb') as f:
+        detections = pickle.load(f)
+    return len(detections)
 
 
-def num_detections_from_openpose_json(detections_path):
-    keypoints_jsones = glob.glob(os.path.join(detections_path, '*'))
-    num = 0
-    for keypoints_json in keypoints_jsones:
-        num += len(json.load(open(keypoints_json, 'r'))['people'])
-    return num
-
-def detections_generator_from_openpose_json(video_name, base_path, detections_path):
-    reader = CAMPUSVideoReader(base_path, video_name)
-    prev_frame = -1
-    keypoints_jsones = glob.glob(os.path.join(detections_path, '*'))
-    keypoints_jsones = sorted(keypoints_jsones, key=lambda x: int(x[x.find('_') + 1:x.rfind('_')]))
-    for i, keypoints_json in enumerate(keypoints_jsones):
-        keypoints = json.load(open(keypoints_json, 'r'))
-
+def detections_generator(video_dir, detections_path):
+    reader = CAMPUSVideoReader(video_dir)
+    with open(detections_path, 'rb') as f:
+        detections = pickle.load(f)
+    for i, pose in enumerate(detections):
         img = reader.getFrame(i)
-
-        for people in keypoints['people']:
-            pose = people['pose_keypoints_2d']
-
-            bb = pose2bb(pose)
-            newbb, newpose = scale_bb(bb, pose, 1.25)
-
-            if newbb[2] < 20 or newbb[3] < 20:
-                snapshot = np.zeros((256, 128, 3))
-            else:
-                snapshot = get_bb(img, newbb)
-                snapshot = cv2.resize(snapshot, (128, 256))
-
-            yield snapshot
-
-
-def detections_generator_from_openpose(iCam, base_path, detections_path):
-    reader = DukeVideoReader(base_path)
-    # for iCam in range(1,9):
-    prev_frame = -1
-    pose_file = os.path.join(detections_path, 'camera{0}.mat'.format(iCam))
-
-    with h5py.File(pose_file, 'r') as f:
-        detections = np.transpose(np.array(f['detections']))
-
-    for ind in range(detections.shape[0]):
-
-        iFrame = detections[ind, 1].astype('int')
-        if iFrame != prev_frame:
-            img = reader.getFrame(iCam, iFrame)
-            prev_frame = iFrame
-
-        pose = detections[ind, 2:]
-        bb = pose2bb(pose)
-        newbb, newpose = scale_bb(bb, pose, 1.25)
+        bb = pose2bb(pose[2:])
+        newbb, newpose = scale_bb(bb, pose[2:], 1.25)
 
         if newbb[2] < 20 or newbb[3] < 20:
             snapshot = np.zeros((256, 128, 3))
@@ -355,3 +187,6 @@ def detections_generator_from_openpose(iCam, base_path, detections_path):
             snapshot = cv2.resize(snapshot, (128, 256))
 
         yield snapshot
+
+
+
